@@ -38,20 +38,37 @@ const int8_t KNOBDIR[] = {
 
 // ----- Initialization and Default Values -----
 
-RotaryEncoder::RotaryEncoder(int pin1, int pin2, LatchMode mode)
+RotaryEncoder::RotaryEncoder(int pin1, int pin2, bool ExternalCall, LatchMode mode)
 {
-  // Remember Hardware Setup
-  _pin1 = pin1;
-  _pin2 = pin2;
+  int sig1;
+  int sig2;
+
+
+	// Remember Hardware Setup
   _mode = mode;
 
-  // Setup the input pins and turn on pullup resistor
-  pinMode(pin1, INPUT_PULLUP);
-  pinMode(pin2, INPUT_PULLUP);
+ 
+  if (ExternalCall){ //if it is external then we just pass the integer value in (either 0 or 1)
+   sig1 = pin1;
+   sig2 = pin2;
+	  
+  }
+  else{
+	  
+	// Remember Hardware Setup 
+	_pin1 = pin1;
+    _pin2 = pin2;
+    
+    // Setup the input pins and turn on pullup resistor
+    pinMode(pin1, INPUT_PULLUP);
+    pinMode(pin2, INPUT_PULLUP);
 
+    // when not started in motion, the current state of the encoder should be 3
+    sig1 = digitalRead(_pin1);
+    sig2 = digitalRead(_pin2);	
+  }
+  
   // when not started in motion, the current state of the encoder should be 3
-  int sig1 = digitalRead(_pin1);
-  int sig2 = digitalRead(_pin2);
   _oldState = sig1 | (sig2 << 1);
 
   // start with position 0;
@@ -60,12 +77,27 @@ RotaryEncoder::RotaryEncoder(int pin1, int pin2, LatchMode mode)
   _positionExtPrev = 0;
 } // RotaryEncoder()
 
+/*RotaryEncoder::RotaryEncoder(int pin1State, int pin2State, LatchMode mode)
+{
+  // Remember Hardware Setup 
+  _mode = mode;
+
+  // when not started in motion, the current state of the encoder should be 3
+  int sig1 = pin1State;
+  int sig2 = pin2State;
+  _oldState = sig1 | (sig2 << 1);
+
+  // start with position 0;
+  _position = 0;
+  _positionExt = 0;
+  _positionExtPrev = 0;
+} // RotaryEncoderDirect()
 
 long RotaryEncoder::getPosition()
 {
   return _positionExt;
 } // getPosition()
-
+*/
 
 RotaryEncoder::Direction RotaryEncoder::getDirection()
 {
@@ -112,6 +144,7 @@ void RotaryEncoder::tick(void)
 {
   int sig1 = digitalRead(_pin1);
   int sig2 = digitalRead(_pin2);
+  
   int8_t thisState = sig1 | (sig2 << 1);
 
   if (_oldState != thisState) {
@@ -149,6 +182,46 @@ void RotaryEncoder::tick(void)
   } // if
 } // tick()
 
+void RotaryEncoder::tickExt(int pin1State, int pin2State)
+{
+  int sig1 = pin1State;
+  int sig2 = pin2State;
+  int8_t thisState = sig1 | (sig2 << 1);
+
+  if (_oldState != thisState) {
+    _position += KNOBDIR[thisState | (_oldState << 2)];
+    _oldState = thisState;
+
+    switch (_mode) {
+    case LatchMode::FOUR3:
+      if (thisState == LATCH3) {
+        // The hardware has 4 steps with a latch on the input state 3
+        _positionExt = _position >> 2;
+        _positionExtTimePrev = _positionExtTime;
+        _positionExtTime = millis();
+      }
+      break;
+
+    case LatchMode::FOUR0:
+      if (thisState == LATCH0) {
+        // The hardware has 4 steps with a latch on the input state 0
+        _positionExt = _position >> 2;
+        _positionExtTimePrev = _positionExtTime;
+        _positionExtTime = millis();
+      }
+      break;
+
+    case LatchMode::TWO03:
+      if ((thisState == LATCH0) || (thisState == LATCH3)) {
+        // The hardware has 2 steps with a latch on the input state 0 and 3
+        _positionExt = _position >> 1;
+        _positionExtTimePrev = _positionExtTime;
+        _positionExtTime = millis();
+      }
+      break;
+    } // switch
+  } // if
+} // tick()
 
 unsigned long RotaryEncoder::getMillisBetweenRotations() const
 {
